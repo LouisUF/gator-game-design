@@ -261,30 +261,31 @@
   #hud .row { margin-bottom: 8px; }
   #hud .label { color: #ffd800; }
 
-  /* Progress bar */
+  /* Progress bar (vertical, hugging left edge) */
   #progress-bar {
     position: fixed;
-    bottom: 110px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 320px;
-    height: 16px;
+    left: 20px;
+    top: 130px;
+    bottom: 130px;
+    width: 18px;
     background: #000;
     border: 3px solid #fff;
     z-index: 20;
     pointer-events: none;
   }
   #progress-fill {
-    height: 100%;
-    width: 0%;
-    background: linear-gradient(to right, #00d800, #ffd800, #e8410a);
-    transition: width 0.1s;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 0%;
+    background: linear-gradient(to top, #00d800, #ffd800, #e8410a);
+    transition: height 0.1s;
   }
   #progress-label {
     position: absolute;
     top: -22px;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
     color: #fff;
     text-shadow: 2px 2px 0 #000;
     font-family: 'Press Start 2P', monospace;
@@ -444,6 +445,101 @@
   @keyframes arrow-bounce {
     0%, 100% { transform: translateX(0); }
     50%      { transform: translateX(6px); }
+  }
+
+  /* ---------- MOBILE / SHORT VIEWPORT ---------- */
+  @media (max-width: 640px), (max-height: 500px) {
+    /* Popups: slimmer padding, safe max-height so tall content scrolls internally */
+    .section { max-width: 86vw; }
+    .pixel-box {
+      padding: 18px 22px;
+      box-shadow:
+        6px 0 0 #000,
+        -6px 0 0 #000,
+        0 6px 0 #000,
+        0 -6px 0 #000,
+        6px 6px 0 rgba(0,0,0,0.3);
+      max-height: 82vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    .pixel-box::before,
+    .pixel-box::after { width: 6px; height: 6px; }
+    .pixel-box::before {
+      top: -6px; left: -6px;
+      box-shadow: 6px -6px 0 #000, -6px 6px 0 #000;
+    }
+    .pixel-box::after {
+      bottom: -6px; right: -6px;
+      box-shadow: 6px -6px 0 #000, -6px 6px 0 #000;
+    }
+
+    /* Text scaling */
+    .pixel-box h1 { font-size: 22px; margin-bottom: 12px; }
+    .pixel-box h2 { font-size: 16px; margin-bottom: 10px; }
+    .pixel-box p  { font-size: 16px; margin-bottom: 6px; line-height: 1.25; }
+    .pixel-box .subtitle { font-size: 8px; margin-bottom: 10px; letter-spacing: 0.5px; }
+    .pixel-box ul { font-size: 15px; }
+    .pixel-box ul li { padding-left: 20px; margin: 4px 0; }
+    .pixel-box ul li::before { font-size: 14px; }
+
+    /* Override any inline font-sizes I set on individual <p> tags */
+    .pixel-box p[style*="font-size:22px"] { font-size: 15px !important; }
+    .pixel-box p[style*="font-size:18px"] { font-size: 13px !important; }
+
+    /* Discord button */
+    .discord-btn {
+      font-size: 11px;
+      padding: 12px 18px;
+      border-width: 3px;
+      box-shadow: 4px 4px 0 #000;
+    }
+    .discord-btn:hover  { box-shadow: 2px 2px 0 #000; }
+    .discord-btn:active { box-shadow: 0 0 0 #000; }
+
+    /* Gator: smaller, tucked further left */
+    #gator {
+      left: 40px;
+      width: 48px;
+      height: 48px;
+      bottom: 100px;
+    }
+
+    /* HUD: compact top-left readout */
+    #hud {
+      top: 10px;
+      left: 10px;
+      font-size: 9px;
+      text-shadow: 2px 2px 0 #000;
+    }
+    #hud .row { margin-bottom: 4px; }
+
+    /* Progress bar: slim vertical against the left edge */
+    #progress-bar {
+      left: 6px;
+      top: 100px;
+      bottom: 115px;
+      width: 10px;
+      border-width: 2px;
+    }
+    #progress-label { display: none; }
+
+    /* Scroll hint */
+    #scroll-hint {
+      right: 12px;
+      bottom: 145px;
+      font-size: 9px;
+    }
+
+    /* Title screen */
+    #title-screen h1  { font-size: 28px; }
+    #title-screen .sub { font-size: 10px; margin-bottom: 24px; letter-spacing: 1px; }
+    #title-screen .blink { font-size: 12px; }
+
+    /* World decorations */
+    .qblock { width: 40px; height: 40px; }
+    .qblock::after { font-size: 20px; }
+    .pipe { width: 52px; }
   }
 </style>
 </head>
@@ -837,7 +933,7 @@
     }
 
     // Progress bar
-    progressFill.style.width = (scrollPct * 100) + '%';
+    progressFill.style.height = (scrollPct * 100) + '%';
 
     // Hide scroll hint once they're moving
     if (scrollPos > 100) {
