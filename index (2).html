@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gator Game Design — University of Florida</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+  /* ---------- RESET ---------- */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'VT323', monospace;
+    background: #5c94fc;
+    color: #fff;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    cursor: crosshair;
+  }
+
+  /* ---------- SKY (fixed background) ---------- */
+  .sky {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(to bottom, #5c94fc 0%, #5c94fc 70%, #7bb5ff 100%);
+    z-index: 0;
+  }
+
+  /* Pixel clouds in the sky */
+  .cloud {
+    position: fixed;
+    image-rendering: pixelated;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  /* ---------- WORLD (the scrolling part) ---------- */
+  #world {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 8000px; /* total scroll distance */
+    z-index: 2;
+    will-change: transform;
+  }
+
+  /* Distant mountains (parallax slow) */
+  #mountains {
+    position: fixed;
+    bottom: 96px;
+    left: 0;
+    width: 4000px;
+    height: 200px;
+    z-index: 2;
+    will-change: transform;
+    pointer-events: none;
+  }
+
+  /* Bushes/hills mid-ground */
+  #hills {
+    position: fixed;
+    bottom: 96px;
+    left: 0;
+    width: 6000px;
+    height: 80px;
+    z-index: 3;
+    will-change: transform;
+    pointer-events: none;
+  }
+
+  /* Ground tile strip */
+  .ground {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 96px;
+    z-index: 5;
+    background-image:
+      linear-gradient(to bottom, #c84c0c 0px, #c84c0c 8px, #e87038 8px, #e87038 16px),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23c84c0c'/><rect x='0' y='0' width='32' height='4' fill='%23e87038'/><rect x='4' y='8' width='4' height='4' fill='%23a83000'/><rect x='16' y='16' width='4' height='4' fill='%23a83000'/><rect x='24' y='8' width='4' height='4' fill='%23a83000'/><rect x='8' y='24' width='4' height='4' fill='%23a83000'/><rect x='20' y='24' width='4' height='4' fill='%23a83000'/></svg>");
+    background-repeat: repeat-x;
+    background-size: 32px 32px, 32px 32px;
+    background-position: 0 0, 0 16px;
+  }
+
+  /* Grass strip on top of ground */
+  .grass {
+    position: fixed;
+    bottom: 96px;
+    left: 0;
+    right: 0;
+    height: 8px;
+    z-index: 5;
+    background:
+      repeating-linear-gradient(
+        to right,
+        #00a800 0 4px,
+        #00d800 4px 8px
+      );
+  }
+
+  /* ---------- GATOR CHARACTER ---------- */
+  #gator {
+    position: fixed;
+    bottom: 104px;
+    left: 200px;
+    width: 64px;
+    height: 64px;
+    z-index: 10;
+    transition: transform 0.08s steps(2);
+  }
+  #gator.walking {
+    animation: bob 0.3s steps(2) infinite;
+  }
+  @keyframes bob {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-4px); }
+  }
+  #gator.celebrating {
+    animation: victory-dance 2s ease-in-out infinite;
+    transform-origin: center center;
+  }
+  @keyframes victory-dance {
+    0%   { transform: translateY(0)    rotate(0deg); }
+    20%  { transform: translateY(-60px) rotate(-180deg); }
+    40%  { transform: translateY(0)    rotate(-360deg); }
+    55%  { transform: translateY(-24px) rotate(-360deg); }
+    70%  { transform: translateY(0)    rotate(-360deg); }
+    85%  { transform: translateY(-24px) rotate(-360deg); }
+    100% { transform: translateY(0)    rotate(-360deg); }
+  }
+
+  /* ---------- SCROLLING TEXT BLOCKS ---------- */
+  .section {
+    position: fixed;
+    z-index: 8;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 0;
+    transition: opacity 0.5s ease-out, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    max-width: 90vw;
+    pointer-events: none;
+  }
+  .section.visible {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    pointer-events: auto;
+  }
+
+  .pixel-box {
+    background: #fff;
+    border: 4px solid #000;
+    box-shadow:
+      8px 0 0 #000,
+      -8px 0 0 #000,
+      0 8px 0 #000,
+      0 -8px 0 #000,
+      8px 8px 0 rgba(0,0,0,0.3);
+    padding: 32px 40px;
+    color: #000;
+    position: relative;
+    image-rendering: pixelated;
+  }
+
+  /* Decorative corner pixels */
+  .pixel-box::before,
+  .pixel-box::after {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: #000;
+  }
+  .pixel-box::before { top: -8px; left: -8px; box-shadow: 8px -8px 0 #000, -8px 8px 0 #000; }
+  .pixel-box::after { bottom: -8px; right: -8px; box-shadow: 8px -8px 0 #000, -8px 8px 0 #000; }
+
+  .pixel-box h1, .pixel-box h2 {
+    font-family: 'Press Start 2P', monospace;
+    color: #e8410a;
+    text-shadow: 3px 3px 0 #ffd800;
+    margin-bottom: 20px;
+    line-height: 1.4;
+  }
+  .pixel-box h1 { font-size: 32px; }
+  .pixel-box h2 { font-size: 20px; }
+  .pixel-box p {
+    font-size: 26px;
+    line-height: 1.3;
+    color: #222;
+    margin-bottom: 12px;
+  }
+  .pixel-box .subtitle {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    color: #008800;
+    margin-bottom: 16px;
+    letter-spacing: 1px;
+  }
+  .pixel-box ul {
+    list-style: none;
+    font-size: 24px;
+    color: #222;
+  }
+  .pixel-box ul li {
+    margin: 8px 0;
+    padding-left: 28px;
+    position: relative;
+  }
+  .pixel-box ul li::before {
+    content: '★';
+    position: absolute;
+    left: 0;
+    color: #e8410a;
+    font-size: 20px;
+  }
+  .pixel-box ul.no-list li::before { content: '✗'; color: #c8001a; }
+  .pixel-box ul.yes-list li::before { content: '✓'; color: #008800; }
+
+  .discord-btn {
+    display: inline-block;
+    background: #5865f2;
+    color: #fff !important;
+    padding: 16px 28px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px;
+    text-decoration: none;
+    border: 4px solid #000;
+    box-shadow: 6px 6px 0 #000;
+    margin-top: 16px;
+    transition: transform 0.1s, box-shadow 0.1s;
+    image-rendering: pixelated;
+  }
+  .discord-btn:hover {
+    transform: translate(3px, 3px);
+    box-shadow: 3px 3px 0 #000;
+    background: #4752c4;
+  }
+  .discord-btn:active {
+    transform: translate(6px, 6px);
+    box-shadow: 0 0 0 #000;
+  }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 20;
+    font-family: 'Press Start 2P', monospace;
+    color: #fff;
+    text-shadow: 3px 3px 0 #000;
+    font-size: 14px;
+    pointer-events: none;
+  }
+  #hud .row { margin-bottom: 8px; }
+  #hud .label { color: #ffd800; }
+
+  /* Progress bar */
+  #progress-bar {
+    position: fixed;
+    bottom: 110px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 320px;
+    height: 16px;
+    background: #000;
+    border: 3px solid #fff;
+    z-index: 20;
+    pointer-events: none;
+  }
+  #progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(to right, #00d800, #ffd800, #e8410a);
+    transition: width 0.1s;
+  }
+  #progress-label {
+    position: absolute;
+    top: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    text-shadow: 2px 2px 0 #000;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  /* Scroll hint */
+  #scroll-hint {
+    position: fixed;
+    bottom: 140px;
+    right: 40px;
+    z-index: 20;
+    font-family: 'Press Start 2P', monospace;
+    color: #fff;
+    text-shadow: 2px 2px 0 #000;
+    font-size: 12px;
+    text-align: center;
+    animation: pulse 1s infinite;
+    pointer-events: none;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: translateY(0); }
+    50%      { opacity: 0.6; transform: translateY(4px); }
+  }
+
+  /* Pixel coin */
+  .coin {
+    position: fixed;
+    bottom: 180px;
+    width: 24px;
+    height: 24px;
+    z-index: 4;
+    animation: coin-spin 0.6s steps(4) infinite;
+    pointer-events: none;
+  }
+  @keyframes coin-spin {
+    0%   { transform: scaleX(1); }
+    50%  { transform: scaleX(0.2); }
+    100% { transform: scaleX(1); }
+  }
+
+  /* Pixel pipes/decorations */
+  .pipe {
+    position: fixed;
+    bottom: 96px;
+    width: 64px;
+    height: 96px;
+    z-index: 4;
+    pointer-events: none;
+  }
+
+  /* Question block */
+  .qblock {
+    position: fixed;
+    bottom: 220px;
+    width: 48px;
+    height: 48px;
+    z-index: 4;
+    background: #ffd800;
+    border: 3px solid #000;
+    box-shadow: inset -4px -4px 0 #c89000, inset 4px 4px 0 #ffe838;
+    pointer-events: none;
+  }
+  .qblock::after {
+    content: '?';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Press Start 2P', monospace;
+    color: #000;
+    font-size: 24px;
+  }
+
+  /* Title screen / start prompt */
+  #title-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #fff;
+    transition: opacity 0.5s;
+  }
+  #title-screen.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+  #title-screen h1 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(28px, 5vw, 56px);
+    color: #ffd800;
+    text-shadow:
+      4px 4px 0 #e8410a,
+      8px 8px 0 #000;
+    margin-bottom: 16px;
+    line-height: 1.4;
+  }
+  #title-screen .sub {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px;
+    color: #fff;
+    margin-bottom: 40px;
+    letter-spacing: 2px;
+  }
+  #title-screen .blink {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 18px;
+    color: #fff;
+    animation: blink 1s steps(2) infinite;
+    margin-top: 20px;
+  }
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  /* End-of-level flag */
+  #flag {
+    position: fixed;
+    bottom: 104px;
+    width: 8px;
+    height: 200px;
+    background: #fff;
+    z-index: 4;
+    pointer-events: none;
+  }
+  #flag::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 40px;
+    height: 28px;
+    background: #00a800;
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+  }
+  #flag::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    width: 16px;
+    height: 16px;
+    background: #ffd800;
+    border-radius: 50%;
+  }
+
+  /* GO arrow at right edge during play */
+  .scroll-arrow {
+    display: inline-block;
+    animation: arrow-bounce 0.6s steps(2) infinite;
+  }
+  @keyframes arrow-bounce {
+    0%, 100% { transform: translateX(0); }
+    50%      { transform: translateX(6px); }
+  }
+</style>
+</head>
+<body>
+
+<!-- Title Screen -->
+<div id="title-screen">
+  <h1>GATOR<br>GAME DESIGN</h1>
+  <div class="sub">★ UNIVERSITY OF FLORIDA ★</div>
+  <div class="sub" style="color:#00ff44;">- WORLD 1-1 -</div>
+  <div class="blink">PRESS ANY KEY OR SCROLL TO START</div>
+</div>
+
+<!-- Sky -->
+<div class="sky"></div>
+
+<!-- Clouds (will be positioned by JS for parallax) -->
+<svg class="cloud" id="cloud1" width="96" height="48" viewBox="0 0 96 48" style="top: 80px;">
+  <g fill="#fff">
+    <rect x="16" y="16" width="64" height="16"/>
+    <rect x="8" y="24" width="80" height="8"/>
+    <rect x="24" y="8" width="16" height="8"/>
+    <rect x="48" y="8" width="24" height="8"/>
+  </g>
+</svg>
+<svg class="cloud" id="cloud2" width="128" height="56" viewBox="0 0 128 56" style="top: 140px;">
+  <g fill="#fff">
+    <rect x="16" y="24" width="96" height="16"/>
+    <rect x="8" y="32" width="112" height="8"/>
+    <rect x="32" y="16" width="24" height="8"/>
+    <rect x="64" y="8" width="32" height="16"/>
+  </g>
+</svg>
+<svg class="cloud" id="cloud3" width="96" height="48" viewBox="0 0 96 48" style="top: 60px;">
+  <g fill="#fff">
+    <rect x="16" y="16" width="64" height="16"/>
+    <rect x="8" y="24" width="80" height="8"/>
+    <rect x="48" y="8" width="20" height="8"/>
+  </g>
+</svg>
+
+<!-- Mountains (parallax) -->
+<svg id="mountains" viewBox="0 0 4000 200" preserveAspectRatio="none">
+  <g fill="#5878d8">
+    <polygon points="0,200 200,80 400,200"/>
+    <polygon points="300,200 550,40 800,200"/>
+    <polygon points="700,200 900,100 1100,200"/>
+    <polygon points="1000,200 1300,60 1600,200"/>
+    <polygon points="1500,200 1750,90 2000,200"/>
+    <polygon points="1900,200 2200,40 2500,200"/>
+    <polygon points="2400,200 2650,100 2900,200"/>
+    <polygon points="2800,200 3100,50 3400,200"/>
+    <polygon points="3300,200 3600,90 3900,200"/>
+  </g>
+  <g fill="#7898ff">
+    <polygon points="200,200 300,140 400,200"/>
+    <polygon points="650,200 800,160 950,200"/>
+    <polygon points="1200,200 1350,140 1500,200"/>
+    <polygon points="1700,200 1850,150 2000,200"/>
+    <polygon points="2300,200 2450,160 2600,200"/>
+    <polygon points="2900,200 3050,140 3200,200"/>
+    <polygon points="3500,200 3650,160 3800,200"/>
+  </g>
+</svg>
+
+<!-- Hills (closer parallax) -->
+<svg id="hills" viewBox="0 0 6000 80" preserveAspectRatio="none">
+  <g fill="#00a800">
+    <ellipse cx="200" cy="80" rx="120" ry="50"/>
+    <ellipse cx="500" cy="80" rx="180" ry="60"/>
+    <ellipse cx="900" cy="80" rx="100" ry="40"/>
+    <ellipse cx="1300" cy="80" rx="160" ry="55"/>
+    <ellipse cx="1700" cy="80" rx="120" ry="45"/>
+    <ellipse cx="2100" cy="80" rx="180" ry="60"/>
+    <ellipse cx="2500" cy="80" rx="100" ry="40"/>
+    <ellipse cx="2900" cy="80" rx="140" ry="50"/>
+    <ellipse cx="3300" cy="80" rx="180" ry="60"/>
+    <ellipse cx="3700" cy="80" rx="120" ry="45"/>
+    <ellipse cx="4100" cy="80" rx="160" ry="55"/>
+    <ellipse cx="4500" cy="80" rx="100" ry="40"/>
+    <ellipse cx="4900" cy="80" rx="180" ry="60"/>
+    <ellipse cx="5300" cy="80" rx="120" ry="45"/>
+    <ellipse cx="5700" cy="80" rx="140" ry="50"/>
+  </g>
+</svg>
+
+<!-- World (foreground decorations - pipes, blocks, coins, flag) -->
+<div id="world">
+  <!-- Pipe at 600px -->
+  <svg class="pipe" style="left: 600px;" viewBox="0 0 64 96">
+    <rect x="0" y="0" width="64" height="20" fill="#00a800"/>
+    <rect x="0" y="0" width="64" height="6" fill="#00ff44"/>
+    <rect x="58" y="6" width="6" height="14" fill="#005800"/>
+    <rect x="8" y="20" width="48" height="76" fill="#00a800"/>
+    <rect x="8" y="20" width="8" height="76" fill="#00ff44"/>
+    <rect x="48" y="20" width="8" height="76" fill="#005800"/>
+  </svg>
+
+  <!-- Question blocks scattered -->
+  <div class="qblock" style="left: 1200px;"></div>
+  <div class="qblock" style="left: 1264px;"></div>
+  <div class="qblock" style="left: 1328px;"></div>
+
+  <!-- Coins -->
+  <svg class="coin" style="left: 900px;" viewBox="0 0 24 24">
+    <rect x="6" y="2" width="12" height="20" fill="#ffd800"/>
+    <rect x="4" y="4" width="16" height="16" fill="#ffd800"/>
+    <rect x="2" y="6" width="20" height="12" fill="#ffd800"/>
+    <rect x="6" y="8" width="2" height="8" fill="#c89000"/>
+    <rect x="16" y="8" width="2" height="8" fill="#c89000"/>
+    <rect x="10" y="6" width="4" height="12" fill="#ffe838"/>
+  </svg>
+  <svg class="coin" style="left: 2200px; bottom: 220px;" viewBox="0 0 24 24">
+    <rect x="6" y="2" width="12" height="20" fill="#ffd800"/>
+    <rect x="4" y="4" width="16" height="16" fill="#ffd800"/>
+    <rect x="2" y="6" width="20" height="12" fill="#ffd800"/>
+    <rect x="6" y="8" width="2" height="8" fill="#c89000"/>
+    <rect x="16" y="8" width="2" height="8" fill="#c89000"/>
+  </svg>
+  <svg class="coin" style="left: 3500px;" viewBox="0 0 24 24">
+    <rect x="6" y="2" width="12" height="20" fill="#ffd800"/>
+    <rect x="4" y="4" width="16" height="16" fill="#ffd800"/>
+    <rect x="2" y="6" width="20" height="12" fill="#ffd800"/>
+    <rect x="6" y="8" width="2" height="8" fill="#c89000"/>
+    <rect x="16" y="8" width="2" height="8" fill="#c89000"/>
+  </svg>
+  <svg class="coin" style="left: 4800px; bottom: 240px;" viewBox="0 0 24 24">
+    <rect x="6" y="2" width="12" height="20" fill="#ffd800"/>
+    <rect x="4" y="4" width="16" height="16" fill="#ffd800"/>
+    <rect x="2" y="6" width="20" height="12" fill="#ffd800"/>
+    <rect x="6" y="8" width="2" height="8" fill="#c89000"/>
+    <rect x="16" y="8" width="2" height="8" fill="#c89000"/>
+  </svg>
+
+  <!-- Second pipe -->
+  <svg class="pipe" style="left: 2700px;" viewBox="0 0 64 96">
+    <rect x="0" y="0" width="64" height="20" fill="#00a800"/>
+    <rect x="0" y="0" width="64" height="6" fill="#00ff44"/>
+    <rect x="58" y="6" width="6" height="14" fill="#005800"/>
+    <rect x="8" y="20" width="48" height="76" fill="#00a800"/>
+    <rect x="8" y="20" width="8" height="76" fill="#00ff44"/>
+    <rect x="48" y="20" width="8" height="76" fill="#005800"/>
+  </svg>
+
+  <!-- More qblocks -->
+  <div class="qblock" style="left: 4200px;"></div>
+  <div class="qblock" style="left: 5500px; bottom: 280px;"></div>
+
+  <!-- Third pipe -->
+  <svg class="pipe" style="left: 5000px; height: 144px;" viewBox="0 0 64 144">
+    <rect x="0" y="0" width="64" height="20" fill="#00a800"/>
+    <rect x="0" y="0" width="64" height="6" fill="#00ff44"/>
+    <rect x="58" y="6" width="6" height="14" fill="#005800"/>
+    <rect x="8" y="20" width="48" height="124" fill="#00a800"/>
+    <rect x="8" y="20" width="8" height="124" fill="#00ff44"/>
+    <rect x="48" y="20" width="8" height="124" fill="#005800"/>
+  </svg>
+
+  <!-- End-of-level flag at 7400px -->
+  <div id="flag" style="left: 7400px;"></div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="row"><span class="label">GATOR</span> &times; 1</div>
+  <div class="row"><span class="label">COINS</span> <span id="coin-count">000</span></div>
+  <div class="row"><span class="label">WORLD</span> 1-1</div>
+</div>
+
+<!-- Progress bar -->
+<div id="progress-bar">
+  <div id="progress-label">DISTANCE</div>
+  <div id="progress-fill"></div>
+</div>
+
+<!-- Scroll hint -->
+<div id="scroll-hint">
+  SCROLL<br>↓<br><span class="scroll-arrow">→ → →</span>
+</div>
+
+<!-- Gator character (SVG pixel art) -->
+<svg id="gator" viewBox="0 0 16 16">
+  <!-- Body -->
+  <rect x="2" y="8" width="10" height="4" fill="#00a800"/>
+  <rect x="2" y="9" width="10" height="2" fill="#00d800"/>
+  <!-- Head -->
+  <rect x="10" y="6" width="5" height="5" fill="#00a800"/>
+  <rect x="10" y="7" width="5" height="2" fill="#00d800"/>
+  <!-- Snout -->
+  <rect x="14" y="8" width="2" height="2" fill="#00a800"/>
+  <!-- Eye -->
+  <rect x="11" y="7" width="2" height="2" fill="#fff"/>
+  <rect x="12" y="7" width="1" height="1" fill="#000"/>
+  <!-- Spikes on back -->
+  <rect x="3" y="7" width="1" height="1" fill="#008800"/>
+  <rect x="5" y="7" width="1" height="1" fill="#008800"/>
+  <rect x="7" y="7" width="1" height="1" fill="#008800"/>
+  <rect x="9" y="7" width="1" height="1" fill="#008800"/>
+  <!-- Spikes on head -->
+  <rect x="11" y="5" width="1" height="1" fill="#008800"/>
+  <rect x="13" y="5" width="1" height="1" fill="#008800"/>
+  <!-- Teeth -->
+  <rect x="14" y="9" width="1" height="1" fill="#fff"/>
+  <!-- Legs (will animate via class) -->
+  <rect x="3" y="12" width="2" height="3" fill="#00a800" class="leg-front"/>
+  <rect x="9" y="12" width="2" height="3" fill="#00a800" class="leg-back"/>
+  <!-- Tail -->
+  <rect x="0" y="9" width="2" height="2" fill="#00a800"/>
+  <rect x="1" y="10" width="1" height="1" fill="#008800"/>
+  <!-- UF orange accent -->
+  <rect x="5" y="8" width="2" height="1" fill="#fa4616"/>
+</svg>
+
+<!-- ========== SECTIONS ========== -->
+
+<!-- Section 1: Welcome / Intro -->
+<div class="section" data-start="0.00" data-end="0.15">
+  <div class="pixel-box">
+    <div class="subtitle">▶ START SCREEN</div>
+    <h1>GATOR<br>GAME<br>DESIGN</h1>
+    <p style="font-size:22px;">We are focused on exploring how games are designed, why certain design decisions are made, and most importantly, what makes something fun!</p>
+    <p style="font-size:22px; margin-top:12px;">Scroll right to begin →</p>
+  </div>
+</div>
+
+<!-- Section 2: Weekly Meetings -->
+<div class="section" data-start="0.20" data-end="0.36">
+  <div class="pixel-box">
+    <div class="subtitle">▶ LEVEL 1 · WEEKLY MEETINGS</div>
+    <h2>TUESDAYS<br>@ 6PM</h2>
+    <p>At our weekly meetings, we will:</p>
+    <ul class="yes-list" style="margin-top:16px;">
+      <li>Learn about the design behind your favorite games</li>
+      <li>Brainstorm ideas for our own board/card/video games</li>
+      <li>Discuss interesting modern design questions</li>
+      <li>Explore how to design new mechanics for games - and how to break them</li>
+    </ul>
+    <p style="margin-top:16px; font-size:22px;">In addition to weekly meetings, we will also have various events throughout the year like game nights, design-a-thons, and other fun activities based on your suggestions!</p>
+  </div>
+</div>
+
+<!-- Section 3: Sample Quests -->
+<div class="section" data-start="0.41" data-end="0.57">
+  <div class="pixel-box">
+    <div class="subtitle">▶ LEVEL 2 · DESIGN QUESTIONS</div>
+    <h2>WHAT IF...?</h2>
+    <p style="font-size:22px; margin-bottom: 16px;">Some questions we would discuss at a meeting:</p>
+    <p style="font-style: italic; margin-top: 14px; padding: 10px 16px; border-left: 6px solid #e8410a; background: #fff4e8;">"What would happen if you added a fourth option to rock paper scissors?"</p>
+    <p style="font-style: italic; margin-top: 12px; padding: 10px 16px; border-left: 6px solid #00a800; background: #eaffe8;">"How could you turn Minecraft into a horror game?"</p>
+    <p style="font-style: italic; margin-top: 12px; padding: 10px 16px; border-left: 6px solid #5865f2; background: #eef0ff;">"Why do my parents like Candy Crush so much?"</p>
+  </div>
+</div>
+
+<!-- Section 4: Design vs Development -->
+<div class="section" data-start="0.62" data-end="0.78">
+  <div class="pixel-box">
+    <div class="subtitle">▶ LEVEL 3 · DESIGN vs DEVELOPMENT</div>
+    <h2 style="color:#c8001a; text-shadow: 3px 3px 0 #000;">DESIGN vs<br>DEVELOPMENT</h2>
+    <p>We're a <strong>design-focused</strong> club — no technical background required. Just bring yourself and your unique brand of creativity and curiosity.</p>
+    <p style="margin-top:14px;">Rather than coding games in Unity or Unreal, we write game design documents.</p>
+    <p style="margin-top:10px;">Rather than asking <strong>HOW</strong> to program a card game, we ask <strong>WHY</strong> card games are fun.</p>
+    <p style="margin-top:10px;">Rather than debugging code, we challenge the design foundations behind games.</p>
+  </div>
+</div>
+
+<!-- Section 5: Join Us -->
+<div class="section" data-start="0.83" data-end="1.00">
+  <div class="pixel-box">
+    <div class="subtitle">▶ LEVEL CLEAR · JOIN THE PARTY</div>
+    <h2>JOIN US!</h2>
+    <p>We are a club heavily focused on collaboration and feedback! If you have any questions or suggestions, please let us know by posting them in the discord!</p>
+    <a href="#" id="discord-link" class="discord-btn" target="_blank" rel="noopener">
+      ▶ JOIN DISCORD
+    </a>
+    <p style="font-size:18px; color:#666; margin-top:20px;">Go Gators 🐊 · University of Florida</p>
+  </div>
+</div>
+
+<script>
+  // ===== CONFIG =====
+  const MAX_SCROLL = 7000; // total virtual scroll distance
+  const PARALLAX_SKY = 0.3;
+  const PARALLAX_MOUNTAINS = 0.5;
+  const PARALLAX_HILLS = 0.8;
+
+  // Replace with real Discord link
+  const DISCORD_URL = "https://discord.gg/GS7xjASrp";
+  document.getElementById('discord-link').href = DISCORD_URL;
+
+  // ===== STATE =====
+  let scrollPos = 0;
+  let targetScroll = 0;
+  let gameStarted = false;
+  let coinsCollected = 0;
+
+  const world = document.getElementById('world');
+  const mountains = document.getElementById('mountains');
+  const hills = document.getElementById('hills');
+  const gator = document.getElementById('gator');
+  const sections = document.querySelectorAll('.section');
+  const progressFill = document.getElementById('progress-fill');
+  const coinCount = document.getElementById('coin-count');
+  const titleScreen = document.getElementById('title-screen');
+  const scrollHint = document.getElementById('scroll-hint');
+  const clouds = [
+    { el: document.getElementById('cloud1'), speed: 0.15, x: 100 },
+    { el: document.getElementById('cloud2'), speed: 0.2, x: 600 },
+    { el: document.getElementById('cloud3'), speed: 0.18, x: 1200 }
+  ];
+
+  // ===== START GAME =====
+  function startGame() {
+    if (gameStarted) return;
+    gameStarted = true;
+    titleScreen.classList.add('hidden');
+    setTimeout(() => titleScreen.style.display = 'none', 500);
+  }
+
+  window.addEventListener('wheel', (e) => {
+    startGame();
+    targetScroll = Math.max(0, Math.min(MAX_SCROLL, targetScroll + e.deltaY * 2));
+    e.preventDefault();
+  }, { passive: false });
+
+  window.addEventListener('keydown', (e) => {
+    startGame();
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+      targetScroll = Math.min(MAX_SCROLL, targetScroll + 80);
+    } else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+      targetScroll = Math.max(0, targetScroll - 80);
+    } else if (e.key === ' ' || e.key === 'Enter') {
+      targetScroll = Math.min(MAX_SCROLL, targetScroll + 200);
+    }
+  });
+
+  // Touch support
+  let touchStartX = 0;
+  window.addEventListener('touchstart', (e) => {
+    startGame();
+    touchStartX = e.touches[0].clientX;
+  });
+  window.addEventListener('touchmove', (e) => {
+    const dx = touchStartX - e.touches[0].clientX;
+    targetScroll = Math.max(0, Math.min(MAX_SCROLL, targetScroll + dx * 1.5));
+    touchStartX = e.touches[0].clientX;
+    e.preventDefault();
+  }, { passive: false });
+
+  // ===== RENDER LOOP =====
+  function render() {
+    // Smooth scroll easing
+    scrollPos += (targetScroll - scrollPos) * 0.1;
+
+    // Move world
+    world.style.transform = `translateX(${-scrollPos}px)`;
+    mountains.style.transform = `translateX(${-scrollPos * PARALLAX_MOUNTAINS}px)`;
+    hills.style.transform = `translateX(${-scrollPos * PARALLAX_HILLS}px)`;
+
+    // Clouds drift independently + slight parallax
+    clouds.forEach(c => {
+      c.x -= c.speed;
+      if (c.x < -200) c.x = window.innerWidth + 100;
+      const parallax = scrollPos * 0.05;
+      c.el.style.left = (c.x - parallax) + 'px';
+    });
+
+    // Compute progress once
+    const scrollPct = scrollPos / MAX_SCROLL;
+    const velocity = targetScroll - scrollPos;
+    const reachedEnd = scrollPct >= 0.96;
+
+    // Gator behavior:
+    //   - At the end of the level: celebrate (flip + dance), overrides everything
+    //   - Otherwise: walk when moving, face direction of travel
+    if (reachedEnd) {
+      gator.classList.add('celebrating');
+      gator.classList.remove('walking');
+      gator.style.transform = ''; // let the CSS animation own the transform
+    } else {
+      gator.classList.remove('celebrating');
+      if (Math.abs(velocity) > 0.5) {
+        gator.classList.add('walking');
+      } else {
+        gator.classList.remove('walking');
+      }
+      if (velocity < -0.5) {
+        gator.style.transform = 'scaleX(-1)';
+      } else if (velocity > 0.5) {
+        gator.style.transform = 'scaleX(1)';
+      }
+    }
+
+    // Progress bar
+    progressFill.style.width = (scrollPct * 100) + '%';
+
+    // Hide scroll hint once they're moving
+    if (scrollPos > 100) {
+      scrollHint.style.opacity = '0';
+    }
+
+    // Section reveals: ONE popup at a time, using non-overlapping scroll zones.
+    // Each section is only visible while scrollPct is inside its [start, end] window.
+    sections.forEach(s => {
+      const start = parseFloat(s.dataset.start);
+      const end   = parseFloat(s.dataset.end);
+      if (scrollPct >= start && scrollPct <= end) {
+        s.classList.add('visible');
+      } else {
+        s.classList.remove('visible');
+      }
+    });
+
+    // Coin "collection" — fake counter that goes up as you scroll
+    const targetCoins = Math.floor(scrollPct * 100);
+    if (targetCoins !== coinsCollected) {
+      coinsCollected = targetCoins;
+      coinCount.textContent = String(coinsCollected).padStart(3, '0');
+    }
+
+    requestAnimationFrame(render);
+  }
+  render();
+</script>
+
+</body>
+</html>
