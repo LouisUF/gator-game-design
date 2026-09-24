@@ -245,6 +245,19 @@
     transform: translate(6px, 6px);
     box-shadow: 0 0 0 #000;
   }
+  .insta-btn {
+    background: #d6249f;
+    margin-left: 12px;
+  }
+  .insta-btn:hover { background: #a91b7d; }
+  .btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .btn-row .discord-btn { margin-top: 0; }
+  .btn-row .insta-btn { margin-left: 0; }
 
   /* ---------- HUD ---------- */
   #hud {
@@ -811,9 +824,14 @@
     <div class="subtitle">▶ LEVEL CLEAR · JOIN THE PARTY</div>
     <h2>JOIN US!</h2>
     <p>We are a club heavily focused on collaboration and feedback! If you have any questions or suggestions, please let us know by posting them in the discord!</p>
-    <a href="#" id="discord-link" class="discord-btn" target="_blank" rel="noopener">
-      ▶ JOIN DISCORD
-    </a>
+    <div class="btn-row">
+      <a href="#" id="discord-link" class="discord-btn" target="_blank" rel="noopener">
+        ▶ DISCORD
+      </a>
+      <a href="#" id="insta-link" class="discord-btn insta-btn" target="_blank" rel="noopener">
+        ▶ INSTAGRAM
+      </a>
+    </div>
     <p style="font-size:18px; color:#666; margin-top:20px;">Go Gators 🐊 · University of Florida</p>
   </div>
 </div>
@@ -825,9 +843,10 @@
   const PARALLAX_MOUNTAINS = 0.5;
   const PARALLAX_HILLS = 0.8;
 
-  // Replace with real Discord link
-  const DISCORD_URL = "https://discord.gg/GS7xjASrp";
+  const DISCORD_URL = "https://discord.gg/VRUg83jmBQ";
+  const INSTAGRAM_URL = "https://www.instagram.com/gatorgamedesign";
   document.getElementById('discord-link').href = DISCORD_URL;
+  document.getElementById('insta-link').href = INSTAGRAM_URL;
 
   // ===== STATE =====
   let scrollPos = 0;
